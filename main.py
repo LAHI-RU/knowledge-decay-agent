@@ -1,19 +1,21 @@
 import os
+import argparse  # <--- New Import
 from src.scanner import ScannerAgent
 from src.evaluator import EvaluatorAgent
 from src.notifier import NotifierAgent
 
-def run_agentic_system():
-    print("\n🚀 STARTING INTERNAL KNOWLEDGE DECAY AGENT\n")
+def run_agentic_system(target_directory):
+    print("\n🚀 STARTING INTERNAL KNOWLEDGE DECAY AGENT")
+    print(f"🎯 Target: {target_directory}\n")
 
-    # --- CONFIGURATION ---
-    # We point the scanner at our mock folder for now.
-    # In a real app, this might be your actual 'docs/' folder.
-    TARGET_DIRECTORY = "mock_docs"
-    
+    # Check if the folder actually exists before starting
+    if not os.path.exists(target_directory):
+        print(f"❌ Error: The directory '{target_directory}' does not exist.")
+        return
+
     # 1. INITIALIZE AGENTS
     print("--- [1] Initializing Agents ---")
-    scanner = ScannerAgent(TARGET_DIRECTORY)
+    scanner = ScannerAgent(target_directory)
     evaluator = EvaluatorAgent()
     notifier = NotifierAgent()
 
@@ -30,10 +32,8 @@ def run_agentic_system():
     stale_files = []
 
     for file in scanned_files:
-        # Ask the Evaluator to judge the content
         analysis = evaluator.evaluate(file['path'], file['content'])
         
-        # If the brain says STALE, we add it to our report list
         if analysis['status'] == 'STALE':
             stale_files.append({
                 "path": file['path'],
@@ -47,4 +47,18 @@ def run_agentic_system():
     print("✅ SYSTEM FINISHED")
 
 if __name__ == "__main__":
-    run_agentic_system()
+    # --- ARGUMENT PARSING LOGIC ---
+    parser = argparse.ArgumentParser(description="Scan documentation for knowledge decay.")
+    
+    # We define a flag '--target' (or '-t' for short)
+    parser.add_argument(
+        "-t", "--target", 
+        type=str, 
+        default="mock_docs", 
+        help="The folder path to scan for documentation."
+    )
+    
+    args = parser.parse_args()
+    
+    # We pass the user's choice into our main function
+    run_agentic_system(args.target)
