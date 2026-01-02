@@ -1,39 +1,74 @@
 import os
+from src.github_client import GitHubConnector
 
 class ScannerAgent:
-    def __init__(self, target_dir):
-        self.target_dir = target_dir
+    def __init__(self, target):
+        self.target = target
+        # Determine mode based on input format (e.g., "owner/repo" vs "folder/path")
+        self.is_github = "/" in target and not os.path.exists(target)
+        
+        if self.is_github:
+            print(f"--- Scanner: Detected GitHub Repository '{target}' ---")
+            self.gh_connector = GitHubConnector()
+        else:
+            print(f"--- Scanner: Detected Local Directory '{target}' ---")
 
     def scan(self):
         """
-        Walks through the target directory and finds all Markdown files.
-        Returns a list of dictionaries containing file path and content.
+        Decides which scan method to use.
         """
-        print(f"--- Scanner: Starting scan in '{self.target_dir}' ---")
-        
-        found_files = []
+        if self.is_github:
+            return self._scan_github()
+        else:
+            return self._scan_local()
 
-        # os.walk is a generator that traverses directories
-        for root, dirs, files in os.walk(self.target_dir):
+    def _scan_local(self):
+        """
+        The original local file scanning logic.
+        """
+        found_files = []
+        for root, dirs, files in os.walk(self.target):
             for file in files:
                 if file.endswith(".md"):
                     full_path = os.path.join(root, file)
-                    
-                    # Read the content
                     try:
                         with open(full_path, "r", encoding="utf-8") as f:
                             content = f.read()
-                            
-                        # Store structural data
-                        file_data = {
-                            "path": full_path,
-                            "content": content
-                        }
-                        found_files.append(file_data)
-                        print(f"✓ Found: {file}")
-                        
+                        found_files.append({"path": full_path, "content": content})
+                        print(f"✓ Found (Local): {file}")
                     except Exception as e:
                         print(f"x Error reading {file}: {e}")
+        return found_files
 
-        print(f"--- Scanner: Scan complete. Found {len(found_files)} files. ---")
+    def _scan_github(self):
+        """
+        The new logic to fetch files via API.
+        """
+        found_files = []
+        try:
+            # 1. Get the repository object
+            repo = self.gh_connector.client.get_repo(self.target)
+            
+            # 2. Start at the root of the repo
+            contents = repo.get_contents("")
+            
+            # 3. Iterate through files (Queue-based traversal)
+            while contents:
+                file_content = contents.pop(0)
+                
+                if file_content.type == "dir":
+                    # If directory, get its contents and add to queue
+                    contents.extend(repo.get_contents(file_content.path))
+                
+                elif file_content.path.endswith(".md"):
+                    # If Markdown, decode the raw bytes to string
+                    print(f"✓ Found (GitHub): {file_content.path}")
+                    found_files.append({
+                        "path": file_content.path,
+                        "content": file_content.decoded_content.decode("utf-8")
+                    })
+                    
+        except Exception as e:
+            print(f"x GitHub Scan Error: {e}")
+            
         return found_files
